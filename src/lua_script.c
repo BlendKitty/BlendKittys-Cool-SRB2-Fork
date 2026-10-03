@@ -27,6 +27,7 @@
 #include "p_local.h"
 #include "p_slopes.h" // for P_SlopeById and slopelist
 #include "p_polyobj.h" // polyobj_t, PolyObjects
+#include "lua_httplib.h" //adds the httplib
 #ifdef LUA_ALLOW_BYTECODE
 #include "netcode/d_netfil.h" // for LUA_DumpFile
 #endif
@@ -63,6 +64,7 @@ static lua_CFunction liblist[] = {
 	LUA_ColorLib, // general color functions
 	LUA_InputLib, // inputs
 	LUA_BanpyuraLib, // banpyura-specific functions
+	LUA_HTTPLib, // http library from srb2 ax
 	NULL
 };
 
@@ -545,10 +547,11 @@ static int setglobals(lua_State *L)
 		return 0;
 	}
 
+	Z_Free(name);
+
 	if (LUA_CheckGlobals(L, csname))
 		return 0;
 
-	Z_Free(name);
 	return luaL_error(L, "Implicit global " LUA_QS " prevented. Create a local variable instead.", csname);
 }
 

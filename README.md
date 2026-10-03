@@ -35,7 +35,7 @@ Icon credits goes to ClovesCloestarSRB2 and his addon [New Springs](https://mb.s
 - OpenGL Light Dithering, smooth light ramps even for Palette rendering! (SRB2-Classic)
 - Splat interpolation (SRB2-edit)
 - Added 1360x768 resolution (personal use)
-- `r_secbright` Configurable minimum sector brightress (SRB2-Legacy)
+- `r_secbright` Configurable minimum sector brightness (SRB2-Legacy)
 - Readded 2.1 sprite shadows! Enabled using `shadow Sprite` in OpenGL. (SRB2-Legacy)
 
 ### Gameplay / Netplay
@@ -44,15 +44,19 @@ Icon credits goes to ClovesCloestarSRB2 and his addon [New Springs](https://mb.s
 - Fixed SRB2's loading time. (SRB2-Classic)
 - Minimum input delay and Gentleman's delay (Ring Racers)
 - `cam_centertoggle` and `cam2_centertoggle` are not exclusive to the Automatic playstyle.
+- Rejoin server menu with timestamps (Ring Racers)
+- Added total progress bar while downloading addons from a server.
 
 ### Lua
 
 - Added `CameraThinker` hook to alter the camera's behavior.
 - - `player` and `camera` are passed in as arguments. Return `true` to override vanilla camera movement.
+- Added HTTP library from SRB2 AX.
+- - Check the wiki (https://github.com/GLideKS/SRB2-Banpyura/wiki/Lua-stuff) for more details.
 
 ### Miscellaneous
 
-- Improved GIF recording.
+- Improved GIF/movie recording. (Movie HUD, default size limit of 20 MB, fixed aPNG, etc.)
 - The game now goes to the title or drops a warning instead of crashing on the following situations: `Invalid sector number from server`, `Invalid line number from server`, `Savegame corrupted`, `polyobj count inconsistency`, SOCK_Send errors.
 - `saveaddons` saves the current addon order to be loaded as a console script. Useful for quickly testing addon lists locally for servers.
 - Don't reset chasecam and do not run special stage wipe on resync (Jisk, Lugent)

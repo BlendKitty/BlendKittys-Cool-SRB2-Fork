@@ -33,6 +33,10 @@
 #include "../z_zone.h"
 #include "../doomtype.h"
 #include "../doomstat.h"
+#include "../hu_stuff.h"
+#include "d_net.h"
+#include "../r_main.h"
+#include <time.h>
 #if defined (__GNUC__) || defined (__unix__)
 #include <unistd.h>
 #endif
@@ -84,6 +88,8 @@ static boolean IsDownloadingFile(void)
 static void DrawConnectionStatusBox(void)
 {
 	M_DrawTextBox(BASEVIDWIDTH/2-128-8, BASEVIDHEIGHT-16-8, 32, 1);
+	if (cl_mode != CL_DOWNLOADSAVEGAME && filedownload.current != -1)
+		M_DrawTextBox(BASEVIDWIDTH/2-128-8, BASEVIDHEIGHT-46-8, 32, 1);
 
 	if (cl_mode == CL_CONFIRMCONNECT || IsDownloadingFile())
 		return;
@@ -111,7 +117,7 @@ static void DrawFileProgress(fileneeded_t *file, int y)
 
 	V_DrawString(BASEVIDWIDTH/2-128, y, V_20TRANS|V_ALLOWLOWERCASE|MENUCAPS, progress_str);
 
-	V_DrawRightAlignedString(BASEVIDWIDTH/2+128, y, V_20TRANS|V_MONOSPACE|MENUCAPS, va("%3.1fK/s ", ((double)getbps)/1024));
+	V_DrawRightAlignedString(BASEVIDWIDTH/2+128, y, V_20TRANS|V_MONOSPACE|MENUCAPS, va("%3.1fKB/s", ((double)getbps)/1024));
 }
 
 static void CL_DrawAddonTypes(void)
@@ -397,37 +403,40 @@ static void CL_DrawDownloadAddonList(void)
 
 #define charsonside 18
 #define maxcharlen (charsonside * 2) + 3 // 3 for the 3 dots
+	INT32 i;
 	INT32 count = 0;
 	INT32 x = 14;
 	INT32 y = ypos + 68;
 	INT32 height = 10;
 	INT32 totalsize = 0;
-	INT32 addons = 0;
-
-	if (fileneedednum > 0)
+	fileneeded_t filelist[fileneedednum];
+	INT32 filelistsize = 0;
+	for (int j = 0; j < fileneedednum; j++)
 	{
-		for (INT32 i = viewfiles; i < fileneedednum; i++)
+		if ((fileneeded[j].status != FS_NOTFOUND) && (fileneeded[j].status != FS_MD5SUMBAD))
+			continue;
+
+		filelist[filelistsize] = fileneeded[j];
+		filelistsize++;
+		totalsize += fileneeded[j].totalsize;
+	}
+	totalsize = (float)totalsize;
+
+	if (filelistsize > 0)
+	{
+		for (i = viewfiles; i < filelistsize; i++)
 		{
-			if ((fileneeded[i].status != FS_NOTFOUND) && (fileneeded[i].status != FS_MD5SUMBAD))
-				continue;
-
-			addons++;
-			totalsize += fileneeded[i].totalsize;
-
-			if (count == MAXLISTADDONS || count == MAXLISTADDONS * 2)
-				continue; // continue here so that addons/totalsize are updated but nothing else is drawn
-
-			if (addons & 1)
+			if (i & 1)
 				V_DrawFill(x - 2, y - 1, 290, height, (cv_menubgcolor.value - 3));
 			else
 				V_DrawFill(x - 2, y - 1, 290, height, (cv_menubgcolor.value - 2));
 			
 			INT32 color = 0; // new addon
-			if (fileneeded[i].status == FS_MD5SUMBAD)
+			if (filelist[i].status == FS_MD5SUMBAD)
 				color = V_SKYMAP; // addon update
 
 			char tempname[28];
-			char *filename = fileneeded[i].filename;
+			char *filename = filelist[i].filename;
 			filename += strlen(filename) - nameonlylength(filename);
 			if (strlen(filename) > (sizeof(tempname) - 1)) // too long to display fully
 			{
@@ -445,7 +454,7 @@ static void CL_DrawDownloadAddonList(void)
 
 			V_DrawThinString(x + 6 * 3, y + 1, V_ALLOWLOWERCASE|V_6WIDTHSPACE|color, filename);
 
-			float file_size = ((float)fileneeded[i].totalsize);
+			float file_size = ((float)filelist[i].totalsize);
 			const char *size_mode = "B";
 			if (file_size >= (1024.0f * 1024.0f))
 			{
@@ -461,9 +470,11 @@ static void CL_DrawDownloadAddonList(void)
 
 			y += height;
 			count++;
+			if (count == MAXLISTADDONS)
+				break;
+			if (count == MAXLISTADDONS * 2)
+				break;
 		}
-
-		totalsize = (float)totalsize;
 
 		const char *size_mode = "B";
 		if (totalsize >= (1024.0f * 1024.0f))
@@ -478,15 +489,15 @@ static void CL_DrawDownloadAddonList(void)
 		}
 
 		V_DrawString(12, ypos + 58, V_ALLOWLOWERCASE|MENUCOLOR,
-			va("Download %i addons?", addons));
+			va("Download %i addons?", filelistsize));
 		V_DrawRightAlignedString(BASEVIDWIDTH - x - 3, ypos + 58, V_ALLOWLOWERCASE|MENUCOLOR, va("%.1f%s total", (float)totalsize, size_mode));
 
-		if (addons >= MAXLISTADDONS)
+		if (filelistsize >= MAXLISTADDONS)
 		{
 			if (viewfiles)
 				V_DrawRightAlignedThinString(BASEVIDWIDTH - 10, (ypos + 58 + 10) - ((ccstime % 8) / 5), MENUCOLOR, "\x1A");
 
-			if (viewfiles != (addons - ADDONSCROLLLIMIT))
+			if (viewfiles != (filelistsize - ADDONSCROLLLIMIT))
 				V_DrawRightAlignedThinString(BASEVIDWIDTH - 10, (y - 10) + ((ccstime % 8) / 5), MENUCOLOR, "\x1B");
 		}
 	}
@@ -508,7 +519,7 @@ static void CL_DrawDownloadAddonList(void)
 		V_ALLOWLOWERCASE, va("%sESC%s - Cancel", GetChatColorFromVideoFlag(MENUCOLOR), "\x80")
 	);
 
-	if (addons >= MAXLISTADDONS)
+	if (filelistsize >= MAXLISTADDONS)
 	{
 		V_DrawCenteredThinString(
 			BASEVIDWIDTH/2, BASEVIDHEIGHT - (ypos + 15),
@@ -522,6 +533,33 @@ static void CL_DrawDownloadAddonList(void)
 	);
 #undef maxcharlen
 #undef charsonside
+}
+
+static void DrawOverallProgress(int y)
+{
+	UINT32 totalsize = filedownload.totalsize;
+	INT32 downloadedfiles = filedownload.completednum;
+	INT32 totalfiles = filedownload.remaining + filedownload.completednum;
+	INT32 downloaded = filedownload.completedsize;
+	if (fileneeded[filedownload.current].currentsize != fileneeded[filedownload.current].totalsize)
+		downloaded = filedownload.completedsize + fileneeded[filedownload.current].currentsize;
+
+	INT32 dldlength = (INT32)((downloaded/(double)totalsize) * 256);
+	if (dldlength > 256)
+		dldlength = 256;
+	V_DrawFill(BASEVIDWIDTH/2-128, y, 256, 8, 111);
+	V_DrawFill(BASEVIDWIDTH/2-128, y, dldlength, 8, 96);
+
+	const char *progress_str;
+	if (totalsize >= 1024*1024)
+		progress_str = va(" %.2fMiB/%.2fMiB", (double)downloaded / (1024*1024), (double)totalsize / (1024*1024));
+	else if (totalsize < 1024)
+		progress_str = va(" %4uB/%4uB", downloaded, totalsize);
+	else
+		progress_str = va(" %.2fKiB/%.2fKiB", (double)downloaded / 1024, (double)totalsize / 1024);
+
+	V_DrawString(BASEVIDWIDTH/2-128, y, V_20TRANS|V_ALLOWLOWERCASE, progress_str);
+	V_DrawRightAlignedString(BASEVIDWIDTH/2+128, y, V_20TRANS|V_ALLOWLOWERCASE|MENUCAPS, va("%2u/%2u Files", downloadedfiles+1, totalfiles));
 }
 
 //
@@ -740,7 +778,7 @@ static void CL_DrawConnectionStatus(void)
 			const char *download_str = M_GetText("Downloading \"%s\"");
 #endif
 
-			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-24, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS,
+			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-46-24, MENUCOLOR|MENUCAPS,
 				va(download_str, tempname));
 
 			// Rusty: actually lets do this instead
@@ -760,16 +798,18 @@ static void CL_DrawConnectionStatus(void)
 					strlcpy(tempname, http_source, sizeof(tempname));
 				}
 
-				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-16, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS,
+				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-46-16, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS,
 					va(M_GetText("from %s"), tempname));
 			}
 			else
 			{
-				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-16, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS,
+				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-46-16, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS,
 					M_GetText("from the server"));
 			}
+			DrawFileProgress(file, BASEVIDHEIGHT-46);
 
-			DrawFileProgress(file, BASEVIDHEIGHT-16);
+			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-14, V_ALLOWLOWERCASE|MENUCOLOR|MENUCAPS, "Total Progress");
+			DrawOverallProgress(BASEVIDHEIGHT-16);
 		}
 		else
 		{
@@ -1135,7 +1175,7 @@ static void BeginDownload(boolean direct)
 	}
 }
 
-static void M_ConfirmConnect(event_t *ev)
+/*static void M_ConfirmConnect(event_t *ev)
 {
 	if (ev->type == ev_keydown)
 	{
@@ -1150,7 +1190,7 @@ static void M_ConfirmConnect(event_t *ev)
 			M_ClearMenus(true);
 		}
 	}
-}
+}*/
 
 static const char *GetPrintableFileSize(UINT64 filesize)
 {
@@ -1182,6 +1222,7 @@ static void ShowDownloadConsentMessage(void)
 		if (IsFileDownloadable(&fileneeded[i]))
 			totalsize += fileneeded[i].totalsize;
 	}
+	filedownload.totalsize = totalsize;
 
 	/*
 	const char *downloadsize = GetPrintableFileSize(totalsize);
@@ -1298,13 +1339,13 @@ static boolean CL_FinishedFileList(void)
 	{
 		if (serverisfull)
 		{
-			M_StartMessage(M_GetText(
+			/*M_StartMessage(M_GetText(
 				"This server is full!\n"
 				"\n"
 				"You may load server addons (if any), and wait for a slot.\n"
 				"\n"
 				"Press ENTER to continue\nor ESC to cancel.\n\n"
-			), M_ConfirmConnect, MM_EVENTHANDLER);
+			), M_ConfirmConnect, MM_EVENTHANDLER);*/
 			cl_mode = CL_CONFIRMCONNECT;
 			curfadevalue = 0;
 		}
@@ -1940,6 +1981,31 @@ void CL_ConnectToServer(void)
 	DEBFILE(va("Synchronisation Finished\n"));
 
 	displayplayer = consoleplayer;
+
+	// At this point we've succesfully joined the server, if we joined by IP (ie: a valid joinedIP string), save it!
+	strcpy(tmpsave, cv_servername.string);
+	tmpsave[255] = '\0';
+
+	// No IP? Try to find it then!
+	if (I_GetNodeAddress && !joinedIP[0])
+	{
+		const char* address = I_GetNodeAddress(servernode);
+		strcpy(joinedIP, address);
+	}
+
+	if (joinedIP[0])	// false if we have "" which is \0
+	{
+		time_t t;
+		struct tm *tmp;
+		time(&t);
+		tmp = localtime(&t);
+
+		char date[256];
+		strftime(date, sizeof(date), "%Y/%m/%d %H:%M:%S", tmp);
+
+		M_AddToJoinedIPs(joinedIP, date, tmpsave);
+	}
+	joinedIP[0] = '\0';
 }
 
 /** Called when a PT_SERVERINFO packet is received
