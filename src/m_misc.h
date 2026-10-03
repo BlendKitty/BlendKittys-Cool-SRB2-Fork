@@ -24,12 +24,6 @@
 typedef enum {
 	MM_OFF = 0,
 	MM_APNG,
-	MM_MP4,
-	MM_WEBM,
-	MM_AVI,
-	MM_MKV,
-	MM_OGV,
-	MM_LIBAV_GIF,
 	MM_GIF,
 	MM_SCREENSHOT
 } moviemode_t;
@@ -44,8 +38,6 @@ extern consvar_t cv_apng_delay, cv_apng_downscale;
 void M_StartMovie(void);
 void M_SaveFrame(void);
 void M_StopMovie(void);
-boolean M_IsMovieModeVideo(moviemode_t mode);
-boolean M_IsRecordingVideo(void);
 INT32 M_GetMovieFrames(void);
 float M_GetMovieSize(void);
 
